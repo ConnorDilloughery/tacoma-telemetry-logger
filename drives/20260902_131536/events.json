@@ -1,0 +1,26 @@
+[
+  {
+    "index": 1,
+    "event_time": "2026-09-02T13:18:27.287278",
+    "decel_rate_mph_per_s": -12.99,
+    "clip_file": null
+  },
+  {
+    "index": 2,
+    "event_time": "2026-09-02T13:18:36.798373",
+    "decel_rate_mph_per_s": -12.98,
+    "clip_file": null
+  },
+  {
+    "index": 3,
+    "event_time": "2026-09-02T13:18:56.020824",
+    "decel_rate_mph_per_s": -19.0,
+    "clip_file": null
+  },
+  {
+    "index": 4,
+    "event_time": "2026-09-02T13:19:02.528190",
+    "decel_rate_mph_per_s": -11.98,
+    "clip_file": null
+  }
+]
