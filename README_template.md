@@ -1,0 +1,133 @@
+# Tacoma Telemetry & Sensor-Fusion Highway 17 Logger
+
+A Raspberry Pi-based vehicle telemetry system built into a 2025 Toyota
+Tacoma: it reads live CAN bus data over OBD-II, fuses it with GPS and
+IMU readings using an Extended Kalman Filter, records dashcam video,
+and automatically detects and clips hard-braking events -- all
+triggered by the vehicle's own ignition, with no laptop required in
+the field.
+
+Built as a portfolio project targeting Integration & Test / Systems
+Engineering roles in autonomous vehicles and robotics. The goal:
+demonstrate the same skills those teams actually use day to day --
+embedded Linux, multi-sensor integration, sensor fusion, and building
+pipelines that survive real-world hardware faults -- on a real vehicle,
+not a simulation.
+
+## System Architecture
+
+```
+                    ┌─────────────────────────────────────┐
+                    │         Raspberry Pi (4 / 3)         │
+                    │                                       │
+  OBD-II ──CAN──────┤  obd_logger.py     (CAN, ~5Hz)       │
+                    │  gnss_logger.py    (UART, ~1-5Hz)    │
+  GNSS ──UART───────┤  imu_logger.py     (I2C, 10Hz)       │
+                    │  camera_logger.py  (CSI, 30fps)      │
+  IMU ──I2C─────────┤                                       │
+                    │  ignition_watcher.py (auto start/stop)│
+  Camera ──CSI──────┤  run_session.sh      (launches all 4) │
+                    └───────────────┬───────────────────────┘
+                                    │  4 raw files per drive
+                                    ▼
+                     ┌──────────────────────────────┐
+                     │      process_drive.sh         │
+                     │                                │
+                     │  align_logs.py    -- merge_asof│
+                     │                      onto one  │
+                     │                      timeline  │
+                     │  extract_event_clips.py        │
+                     │              -- hard-brake     │
+                     │                 detection +    │
+                     │                 video clips    │
+                     │  ekf_fusion.py -- GNSS+OBD+IMU  │
+                     │              sensor fusion      │
+                     │  generate_drive_report.py       │
+                     │              -- stats, plots,   │
+                     │                 per-drive README│
+                     └───────────────┬────────────────┘
+                                     ▼
+                          drives/<session_id>/
+                          (pushed to this repo)
+```
+
+## Hardware
+
+| Component | Part | Interface |
+|---|---|---|
+| Compute | Raspberry Pi 4 / 3 | -- |
+| CAN adapter | DSD TECH SH-C31A (CANable 2.0 / candleLight firmware) | USB → SocketCAN |
+| OBD-II tap | Pigtail cable, wired to CAN-H/CAN-L via a DB9 breakout | -- |
+| GNSS | Beitian BN-880 (u-blox-class chipset + HMC5883L compass) | UART + I2C |
+| IMU | BNO085 9-DOF (accelerometer + gyro + magnetometer, onboard sensor fusion) | I2C |
+| Camera | Raspberry Pi Camera Module 3 (imx708), fixed infinity focus | CSI |
+
+## Software Pipeline
+
+**Acquisition (run continuously during a drive):**
+- `obd_logger.py` -- polls standard Mode 01 PIDs (speed, RPM, coolant temp, load, throttle) over SocketCAN, with automatic reconnect if the CAN interface drops or isn't up yet at boot
+- `gnss_logger.py` -- parses NMEA GGA/RMC sentences for position, altitude, fix quality, and speed/course
+- `imu_logger.py` -- reads the BNO085's fused orientation quaternion, linear acceleration, and gyro, with outlier rejection for corrupted I2C reads
+- `camera_logger.py` -- records continuous dashcam video (H.264/mp4) with a timestamped start marker for later event-clip extraction
+- `ignition_watcher.py` -- pings the vehicle's ECU over CAN every 2 seconds; starts/stops the whole recording session automatically based on whether the engine is actually running, so nothing needs to be started by hand
+- `run_session.sh` -- launches all four loggers together under one shared session ID
+
+**Processing (run once after a drive, via `process_drive.sh`):**
+- `align_logs.py` -- merges the three independently-clocked, independently-rated sensor logs onto one timeline using an as-of (nearest-timestamp) join
+- `extract_event_clips.py` -- detects hard-braking events from the rate of change of OBD-reported speed (chosen over IMU acceleration since the IMU's mounting axes aren't yet calibrated to the vehicle's frame), and pulls a short video clip around each one
+- `ekf_fusion.py` -- fuses GNSS position, OBD speed, and IMU motion into one continuous vehicle state estimate (see below)
+- `generate_drive_report.py` -- computes trip stats and produces all plots and the per-drive README
+- `update_index.py` -- rebuilds this table you're reading right now
+
+## Sensor Fusion (EKF)
+
+State vector: `[x, y, heading, speed]`, tracked with an Extended Kalman
+Filter. The IMU's gyro/accelerometer drive the prediction step between
+GPS updates; GNSS position and OBD speed correct the estimate whenever
+a new reading arrives. A Zero-Velocity Update (ZUPT) pins the filter
+when the vehicle is stopped, which prevents IMU gyro bias from slowly
+spinning the heading estimate while parked -- a real failure mode this
+project hit and fixed (see below).
+
+**Documented limitation:** the IMU's mounting orientation isn't yet
+calibrated against the vehicle's actual axes, so the filter assumes
+the IMU's local X-axis is roughly forward and Z-axis is roughly
+vertical. A logical next step is an explicit calibration pass (e.g.
+comparing IMU heading change against GPS course change during turns).
+
+## Engineering Log: Real Bugs Found & Fixed
+
+This project was debugged against real hardware and real driving data,
+not just synthetic tests. A few of the more interesting issues:
+
+- **GNSS "null island":** the GPS module reports `(0, 0)` before
+  acquiring a fix; left unfiltered, this turned a real 2-mile drive's
+  computed distance into ~8,000 miles (measuring to the Gulf of
+  Guinea). Fixed by filtering on both exact `(0,0)` and `fix_quality`.
+- **EKF clock discontinuity:** the Pi has no battery-backed real-time
+  clock, so its system clock can jump once it syncs with NTP mid-session.
+  One 510-second timestamp gap in an otherwise ~0.1s-spaced log caused
+  the EKF to project the vehicle position over a kilometer away in a
+  single step. Fixed with a defensive `dt` clamp in the filter's
+  predict step.
+- **Buffered logging under systemd:** a background service's `print()`
+  output doesn't reach the system log in real time by default, making
+  it look like automatic ignition detection wasn't working when it
+  actually was. Fixed by running Python unbuffered (`-u`).
+- **CAN interface not persisting across reboots:** bringing `can0` up
+  manually doesn't survive a reboot; fixed with a `systemd-networkd`
+  config so the interface comes up automatically at boot.
+
+## Future Work
+
+- Hardware-in-the-loop fault injection (simulated GPS dropouts,
+  corrupted CAN frames, IMU glitches) as automated test cases
+- CI pipeline that regression-tests the fusion pipeline against
+  recorded sessions on every commit
+- IMU-to-vehicle axis calibration
+- Further EKF tuning (process/measurement noise, GPS course as a
+  heading measurement)
+
+## Drives
+
+{{DRIVES_TABLE}}
