@@ -8,4 +8,4 @@ processed into per-drive reports below.
 
 | Drive | Date | Duration | Distance | Max Speed | Hard Brakes |
 |---|---|---|---|---|---|
-| [20260902_073000](drives/20260902_073000/README.md) | 2026-09-02 | 3.0 min | 1.5 km | 60.0 km/h | 1 |
+| [20260902_074421](drives/20260902_074421/README.md) | 2026-09-02 | 0.9 min | 0.0 mi | 0.0 mph | 0 |
