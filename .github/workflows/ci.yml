@@ -1,0 +1,32 @@
+name: Pipeline Regression Tests
+
+# Runs on every push and PR to main: replays the real pipeline against
+# every real drive already committed under drives/*/raw/, and fails
+# the build if any of the bugs documented in the README's Engineering
+# Log ever resurface (EKF position runaway, unphysical speed, GNSS
+# null-island distance inflation, or the alignment step silently
+# breaking).
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install pandas numpy matplotlib pytest
+
+      - name: Run regression tests
+        run: pytest tests/ -v
