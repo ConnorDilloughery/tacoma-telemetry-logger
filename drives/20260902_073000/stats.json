@@ -1,0 +1,9 @@
+{
+  "session": "20260902_073000",
+  "start_time": "2026-09-02T07:30:00",
+  "duration_s": 179.9,
+  "distance_km": 1.47,
+  "max_speed_kmh": 60.0,
+  "max_rpm": 2933.0,
+  "num_hard_brake_events": 1
+}
