@@ -2,7 +2,7 @@
 
 - **Start time:** 2026-09-02T13:06:10.951297
 - **Duration:** 692 s (11.5 min)
-- **Distance:** 55585.15 mi
+- **Distance:** 1.32 mi
 - **Max speed:** 36.0 mph
 - **Max RPM:** 2548.0
 - **Hard-braking events detected:** 4
