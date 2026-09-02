@@ -10,6 +10,9 @@
 ## Route
 ![route](route_map.png)
 
+## Route with Speed (3D)
+![route_3d](route_3d.png)
+
 ## Speed
 ![speed](speed.png)
 
