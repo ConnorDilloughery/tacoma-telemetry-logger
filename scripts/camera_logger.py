@@ -26,6 +26,7 @@ Usage:
 
 import argparse
 import json
+import signal
 import subprocess
 from datetime import datetime
 
@@ -66,10 +67,31 @@ def main():
     print(f"Recording to {args.out}")
     print(f"Start time recorded: {start_time.isoformat()} (meta: {meta_path})")
 
-    try:
-        subprocess.run(cmd)
-    except KeyboardInterrupt:
-        pass
+    process = subprocess.Popen(cmd)
+
+    # Critical: don't just ignore an incoming stop signal, explicitly
+    # forward it to rpicam-vid instead. Depending on how this script
+    # gets stopped -- a whole-process-group SIGINT broadcast (what
+    # ignition_watcher.py does) vs. a signal sent directly to just
+    # this PID (e.g. a plain `kill` from a shell script's trap) --
+    # rpicam-vid may or may not receive its own copy automatically.
+    # Explicitly forwarding it here guarantees the child always gets a
+    # graceful stop request either way, so it can finalize the mp4
+    # container properly instead of leaving a truncated file with no
+    # moov atom (unplayable).
+    #
+    # Python's blocking calls (including Popen.wait()) automatically
+    # resume after a signal handler runs (PEP 475), so this doesn't
+    # race the way subprocess.run()'s built-in exception handling did
+    # in the earlier, broken version of this script.
+    def handle_stop_signal(signum, frame):
+        if process.poll() is None:
+            process.send_signal(signal.SIGINT)
+
+    signal.signal(signal.SIGINT, handle_stop_signal)
+    signal.signal(signal.SIGTERM, handle_stop_signal)
+
+    process.wait()
 
     print("Recording stopped.")
 

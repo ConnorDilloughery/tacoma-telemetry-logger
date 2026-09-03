@@ -117,6 +117,25 @@ not just synthetic tests. A few of the more interesting issues:
 - **CAN interface not persisting across reboots:** bringing `can0` up
   manually doesn't survive a reboot; fixed with a `systemd-networkd`
   config so the interface comes up automatically at boot.
+- **Dashcam video never finalizing on a real drive:** the ignition
+  watcher stops a session by sending `SIGINT` to the whole process
+  group at once. `camera_logger.py`'s first version used
+  `subprocess.run()` to launch `rpicam-vid`; when the parent Python
+  process caught that same signal mid-recording, `subprocess.run()`'s
+  own error handling immediately `SIGKILL`ed the still-recording child
+  before it could close out the mp4 container, leaving every real
+  drive's video file unplayable (`moov atom not found`) even though
+  the file existed and had data in it. A first attempt fixed this by
+  having the parent *ignore* the signal instead -- which stopped the
+  premature kill, but now nothing told `rpicam-vid` to stop at all,
+  and it just kept recording as an orphaned process indefinitely. The
+  actual fix: catch the signal in the parent and explicitly forward it
+  to the `rpicam-vid` child, then wait for it to exit on its own --
+  guaranteeing a clean shutdown regardless of exactly how the parent
+  itself gets signaled. Caught by testing the real stop path directly
+  (`kill -INT` against a live session) rather than only a
+  fixed-duration recording, which had been passing the whole time for
+  the wrong reason.
 
 ## Future Work
 
