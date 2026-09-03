@@ -1,0 +1,110 @@
+[
+  {
+    "index": 1,
+    "event_time": "2026-09-02T19:12:07.002982",
+    "decel_rate_mph_per_s": -11.98,
+    "clip_file": null
+  },
+  {
+    "index": 2,
+    "event_time": "2026-09-02T19:12:23.126057",
+    "decel_rate_mph_per_s": -11.97,
+    "clip_file": null
+  },
+  {
+    "index": 3,
+    "event_time": "2026-09-02T19:12:41.947225",
+    "decel_rate_mph_per_s": -18.03,
+    "clip_file": null
+  },
+  {
+    "index": 4,
+    "event_time": "2026-09-02T19:12:57.765198",
+    "decel_rate_mph_per_s": -13.01,
+    "clip_file": null
+  },
+  {
+    "index": 5,
+    "event_time": "2026-09-02T19:15:05.216697",
+    "decel_rate_mph_per_s": -13.01,
+    "clip_file": null
+  },
+  {
+    "index": 6,
+    "event_time": "2026-09-02T19:29:47.742496",
+    "decel_rate_mph_per_s": -12.98,
+    "clip_file": null
+  },
+  {
+    "index": 7,
+    "event_time": "2026-09-02T19:34:51.795223",
+    "decel_rate_mph_per_s": -12.98,
+    "clip_file": null
+  },
+  {
+    "index": 8,
+    "event_time": "2026-09-02T19:35:35.044955",
+    "decel_rate_mph_per_s": -13.0,
+    "clip_file": null
+  },
+  {
+    "index": 9,
+    "event_time": "2026-09-02T19:36:51.533744",
+    "decel_rate_mph_per_s": -12.99,
+    "clip_file": null
+  },
+  {
+    "index": 10,
+    "event_time": "2026-09-02T19:39:43.835093",
+    "decel_rate_mph_per_s": -12.03,
+    "clip_file": null
+  },
+  {
+    "index": 11,
+    "event_time": "2026-09-02T19:40:29.487728",
+    "decel_rate_mph_per_s": -13.0,
+    "clip_file": null
+  },
+  {
+    "index": 12,
+    "event_time": "2026-09-02T19:40:38.298711",
+    "decel_rate_mph_per_s": -12.04,
+    "clip_file": null
+  },
+  {
+    "index": 13,
+    "event_time": "2026-09-02T19:43:14.580925",
+    "decel_rate_mph_per_s": -13.03,
+    "clip_file": null
+  },
+  {
+    "index": 14,
+    "event_time": "2026-09-02T19:44:00.333635",
+    "decel_rate_mph_per_s": -11.98,
+    "clip_file": null
+  },
+  {
+    "index": 15,
+    "event_time": "2026-09-02T19:44:13.649523",
+    "decel_rate_mph_per_s": -11.94,
+    "clip_file": null
+  },
+  {
+    "index": 16,
+    "event_time": "2026-09-02T19:45:32.341876",
+    "decel_rate_mph_per_s": -12.0,
+    "clip_file": null
+  },
+  {
+    "index": 17,
+    "event_time": "2026-09-02T19:46:22.400953",
+    "decel_rate_mph_per_s": -11.95,
+    "clip_file": null
+  },
+  {
+    "index": 18,
+    "event_time": "2026-09-02T19:48:44.275566",
+    "decel_rate_mph_per_s": -12.99,
+    "clip_file": null
+  }
+]
