@@ -150,6 +150,25 @@ not just synthetic tests. A few of the more interesting issues:
   `systemd-journald`, so future logs survive a reboot -- this doesn't
   prevent an unplanned restart, but it means the next one won't also
   erase the evidence needed to diagnose it.
+- **IMU silently freezing on stale I2C readings mid-drive:** a 36-minute
+  real drive came back with only 72 unique acceleration values across
+  22,664 rows -- the BNO085 had locked onto a single stale reading
+  within seconds of starting and never recovered, silently, with no
+  exception raised. The library's own debug output showed the real
+  cause: frequent `RuntimeError: ('Unprocessable Batch bytes', ...)`
+  and `** UNKNOWN Report Type **` errors from `adafruit-circuitpython-
+  bno08x`, a well-documented, unresolved issue in that library on
+  Linux/I2C (confirmed against multiple independent reports of the
+  same errors on otherwise-healthy, stationary setups, going back
+  years) rather than anything specific to this wiring. Since the
+  underlying library issue isn't something to fix directly, the
+  practical workaround: detect staleness explicitly (the same
+  acceleration reading repeating for ~2 seconds straight is itself a
+  fault signal, since real sensor noise alone guarantees a stationary
+  reading still changes slightly every sample) and automatically tear
+  down and re-initialize the I2C connection when it's detected. Tested
+  standalone, this successfully caught and recovered from the freeze
+  multiple times within a two-minute run.
 
 ## Future Work
 

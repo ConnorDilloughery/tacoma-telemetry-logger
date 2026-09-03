@@ -83,6 +83,18 @@ def main():
     print(f"Polling at {args.rate} Hz")
     print("Press Ctrl+C to stop.\n")
 
+    # Staleness detection: an I2C glitch or a chip entering a bad
+    # internal state can make the BNO085 keep returning its LAST
+    # successfully-read report indefinitely, with no exception raised
+    # -- unlike a clean disconnect, this fails silently. A real,
+    # moving sensor's readings change on every sample even at rest
+    # (thermal/electrical noise alone guarantees that), so N identical
+    # consecutive readings is itself a fault signal worth acting on,
+    # not just implausible magnitude.
+    STALE_THRESHOLD = 20  # ~2 seconds at 10Hz before we consider it stuck
+    last_accel = None
+    stale_count = 0
+
     start = time.monotonic()
     try:
         with open(out_path, "w", newline="") as f:
@@ -123,6 +135,38 @@ def main():
                     sleep_time = period - elapsed
                     if sleep_time > 0:
                         time.sleep(sleep_time)
+                    continue
+
+                # Staleness check: has the reading actually changed?
+                if accel_vals == last_accel:
+                    stale_count += 1
+                else:
+                    stale_count = 0
+                last_accel = accel_vals
+
+                if stale_count >= STALE_THRESHOLD:
+                    print(
+                        f"WARNING: IMU reading unchanged for {stale_count} consecutive "
+                        f"samples (~{stale_count / args.rate:.1f}s) -- sensor may be "
+                        f"stuck. Attempting to re-initialize the I2C connection."
+                    )
+                    try:
+                        i2c.deinit()
+                    except Exception:
+                        pass
+                    time.sleep(0.5)
+                    try:
+                        i2c = busio.I2C(board.SCL, board.SDA, frequency=400000)
+                        bno = BNO08X_I2C(i2c)
+                        bno.enable_feature(BNO_REPORT_ROTATION_VECTOR)
+                        bno.enable_feature(BNO_REPORT_LINEAR_ACCELERATION)
+                        bno.enable_feature(BNO_REPORT_GYROSCOPE)
+                        print("IMU re-initialized.")
+                    except Exception as e:
+                        print(f"IMU re-initialization failed: {e}")
+                    stale_count = 0
+                    last_accel = None
+                    time.sleep(period)
                     continue
 
                 row = {
