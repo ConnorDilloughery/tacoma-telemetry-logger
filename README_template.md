@@ -136,6 +136,20 @@ not just synthetic tests. A few of the more interesting issues:
   (`kill -INT` against a live session) rather than only a
   fixed-duration recording, which had been passing the whole time for
   the wrong reason.
+- **Journal logs lost across an unplanned mid-drive reboot:** during
+  one drive, the Pi rebooted on its own partway through (root cause
+  undetermined -- power interruption is the leading suspect, given the
+  dashboard mount had already come loose once before). The video never
+  finalized, no surprise given a full system restart interrupts
+  recording far more abruptly than any signal ever could -- but the
+  bigger issue was that `journalctl` had **no record of the earlier
+  boot at all**, since this Pi's `systemd-journald` wasn't configured
+  to persist logs to disk by default; a reboot wipes them. That meant
+  the first ~35 minutes of debugging context for that session were
+  simply gone. Fixed by creating `/var/log/journal` and restarting
+  `systemd-journald`, so future logs survive a reboot -- this doesn't
+  prevent an unplanned restart, but it means the next one won't also
+  erase the evidence needed to diagnose it.
 
 ## Future Work
 

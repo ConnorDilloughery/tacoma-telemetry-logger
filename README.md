@@ -18,7 +18,7 @@ not a simulation.
 
 ```
                     ┌─────────────────────────────────────┐
-                    │         Raspberry Pi 3         │
+                    │         Raspberry Pi (4 / 3)         │
                     │                                       │
   OBD-II ──CAN──────┤  obd_logger.py     (CAN, ~5Hz)       │
                     │  gnss_logger.py    (UART, ~1-5Hz)    │
@@ -136,6 +136,20 @@ not just synthetic tests. A few of the more interesting issues:
   (`kill -INT` against a live session) rather than only a
   fixed-duration recording, which had been passing the whole time for
   the wrong reason.
+- **Journal logs lost across an unplanned mid-drive reboot:** during
+  one drive, the Pi rebooted on its own partway through (root cause
+  undetermined -- power interruption is the leading suspect, given the
+  dashboard mount had already come loose once before). The video never
+  finalized, no surprise given a full system restart interrupts
+  recording far more abruptly than any signal ever could -- but the
+  bigger issue was that `journalctl` had **no record of the earlier
+  boot at all**, since this Pi's `systemd-journald` wasn't configured
+  to persist logs to disk by default; a reboot wipes them. That meant
+  the first ~35 minutes of debugging context for that session were
+  simply gone. Fixed by creating `/var/log/journal` and restarting
+  `systemd-journald`, so future logs survive a reboot -- this doesn't
+  prevent an unplanned restart, but it means the next one won't also
+  erase the evidence needed to diagnose it.
 
 ## Future Work
 
@@ -149,10 +163,11 @@ not just synthetic tests. A few of the more interesting issues:
 
 ## Drives
 
-**4 drive(s) recorded.**
+**5 drive(s) recorded.**
 
 | Drive | Date | Duration | Distance | Max Speed | Hard Brakes |
 |---|---|---|---|---|---|
+| [20260902_191142](drives/20260902_191142/README.md) | 2026-09-02 | 37.8 min | 22.8 mi | 72.7 mph | 18 |
 | [20260902_160823](drives/20260902_160823/README.md) | 2026-09-02 | 37.9 min | 22.1 mi | 72.1 mph | 13 |
 | [20260902_131536](drives/20260902_131536/README.md) | 2026-09-02 | 3.6 min | 0.9 mi | 41.0 mph | 4 |
 | [20260902_130608](drives/20260902_130608/README.md) | 2026-09-02 | 11.5 min | 1.3 mi | 36.0 mph | 4 |
