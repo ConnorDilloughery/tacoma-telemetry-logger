@@ -1,0 +1,80 @@
+[
+  {
+    "index": 1,
+    "event_time": "2026-09-02T16:13:27.091407",
+    "decel_rate_mph_per_s": -11.99,
+    "clip_file": null
+  },
+  {
+    "index": 2,
+    "event_time": "2026-09-02T16:15:40.053658",
+    "decel_rate_mph_per_s": -11.97,
+    "clip_file": null
+  },
+  {
+    "index": 3,
+    "event_time": "2026-09-02T16:15:44.658553",
+    "decel_rate_mph_per_s": -12.99,
+    "clip_file": null
+  },
+  {
+    "index": 4,
+    "event_time": "2026-09-02T16:17:06.354237",
+    "decel_rate_mph_per_s": -13.08,
+    "clip_file": null
+  },
+  {
+    "index": 5,
+    "event_time": "2026-09-02T16:17:28.881527",
+    "decel_rate_mph_per_s": -12.99,
+    "clip_file": null
+  },
+  {
+    "index": 6,
+    "event_time": "2026-09-02T16:18:01.819557",
+    "decel_rate_mph_per_s": -11.99,
+    "clip_file": null
+  },
+  {
+    "index": 7,
+    "event_time": "2026-09-02T16:41:07.058514",
+    "decel_rate_mph_per_s": -12.98,
+    "clip_file": null
+  },
+  {
+    "index": 8,
+    "event_time": "2026-09-02T16:41:33.590649",
+    "decel_rate_mph_per_s": -12.0,
+    "clip_file": null
+  },
+  {
+    "index": 9,
+    "event_time": "2026-09-02T16:42:55.196644",
+    "decel_rate_mph_per_s": -12.99,
+    "clip_file": null
+  },
+  {
+    "index": 10,
+    "event_time": "2026-09-02T16:44:12.287402",
+    "decel_rate_mph_per_s": -13.0,
+    "clip_file": null
+  },
+  {
+    "index": 11,
+    "event_time": "2026-09-02T16:45:00.150935",
+    "decel_rate_mph_per_s": -12.97,
+    "clip_file": null
+  },
+  {
+    "index": 12,
+    "event_time": "2026-09-02T16:45:21.376779",
+    "decel_rate_mph_per_s": -11.9,
+    "clip_file": null
+  },
+  {
+    "index": 13,
+    "event_time": "2026-09-02T16:45:33.592491",
+    "decel_rate_mph_per_s": -12.84,
+    "clip_file": null
+  }
+]
