@@ -18,7 +18,7 @@ not a simulation.
 
 ```
                     ┌─────────────────────────────────────┐
-                    │         Raspberry Pi (4 / 3)         │
+                    │         Raspberry Pi 3         │
                     │                                       │
   OBD-II ──CAN──────┤  obd_logger.py     (CAN, ~5Hz)       │
                     │  gnss_logger.py    (UART, ~1-5Hz)    │
