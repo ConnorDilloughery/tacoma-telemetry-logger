@@ -169,6 +169,32 @@ not just synthetic tests. A few of the more interesting issues:
   down and re-initialize the I2C connection when it's detected. Tested
   standalone, this successfully caught and recovered from the freeze
   multiple times within a two-minute run.
+- **Root cause behind the IMU freezes, missing camera footage, and
+  repeated mid-drive reboots: sustained undervoltage.** After the
+  staleness fix above shipped, three more real drives still produced
+  no video at all, with zero camera-related log lines -- meaning
+  `camera_logger.py` never even started, not a signal-handling issue
+  this time. Checking `vcgencmd get_throttled` returned `0x50005`:
+  Raspberry Pi's own flag for "currently under-voltage," set
+  continuously, not as an isolated blip. `journalctl` showed
+  `Undervoltage detected!` firing constantly and continuously for
+  hours, starting right at boot. This one finding retroactively
+  explains several previously-separate mysteries: the recurring
+  mid-drive reboots (a brownout, not a software crash or a loose
+  wire), the exact-2.0-second clock discontinuities recurring
+  throughout a drive (likely brief CPU/scheduler stalls under voltage
+  stress), the camera never launching (it's the single heaviest power
+  draw of the four sensors, the first thing marginal power can't
+  sustain), and very plausibly a contributing factor in the I2C
+  freezes attributed to the BNO08x library bug above -- a real
+  upstream issue made more frequent by an underpowered bus, not
+  necessarily occurring at this rate on its own. Confirmed the Pi is
+  not *currently* under-voltage while idle, meaning the fix isn't
+  necessarily "replace the whole power bank" -- next step is an
+  active-load comparison (wall power vs. battery bank, all sensors
+  running) to isolate whether this is the power bank's sustained
+  current capacity, the cable, or a connector, before deciding on a
+  hardware fix.
 
 ## Future Work
 
@@ -182,10 +208,11 @@ not just synthetic tests. A few of the more interesting issues:
 
 ## Drives
 
-**8 drive(s) recorded.**
+**9 drive(s) recorded.**
 
 | Drive | Date | Duration | Distance | Max Speed | Hard Brakes |
 |---|---|---|---|---|---|
+| [20260904_063219](drives/20260904_063219/README.md) | 2026-09-04 | 0.9 min | 0.2 mi | 27.3 mph | 1 |
 | [20260903_171327](drives/20260903_171327/README.md) | 2026-09-03 | 3.8 min | 0.1 mi | 28.6 mph | 3 |
 | [20260903_170528](drives/20260903_170528/README.md) | 2026-09-03 | 5.1 min | 0.7 mi | 25.5 mph | 5 |
 | [20260903_161819](drives/20260903_161819/README.md) | 2026-09-03 | 30.0 min | 19.6 mi | 67.7 mph | 3 |
