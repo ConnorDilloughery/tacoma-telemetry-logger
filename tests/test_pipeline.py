@@ -48,14 +48,29 @@ MAX_PLAUSIBLE_DISTANCE_PER_MINUTE_MILES = 2.0  # ~120 mph sustained, generous
 
 
 def discover_sessions():
-    """Finds every drive with raw sensor CSVs committed under drives/*/raw/."""
+    """
+    Finds every drive with a COMPLETE set of raw sensor CSVs (OBD,
+    GNSS, and IMU) committed under drives/*/raw/.
+
+    Some drives in this repo are intentionally incomplete -- e.g. one
+    preserved as evidence of the IMU failing to start at all during
+    an undervoltage event (see the README's Engineering Log) -- and
+    have only a subset of the usual three files. Those aren't testable
+    sessions (align_logs.py requires all three), so we skip anything
+    missing a sensor file rather than letting the pipeline crash on
+    data that was never meant to be run through it.
+    """
     sessions = []
     if not DRIVES_DIR.exists():
         return sessions
     for session_dir in sorted(DRIVES_DIR.iterdir()):
         raw_dir = session_dir / "raw"
-        obd_files = list(raw_dir.glob("obd_*.csv")) if raw_dir.exists() else []
-        if obd_files:
+        if not raw_dir.exists():
+            continue
+        obd_files = list(raw_dir.glob("obd_*.csv"))
+        gnss_files = list(raw_dir.glob("gnss_*.csv"))
+        imu_files = list(raw_dir.glob("imu_*.csv"))
+        if obd_files and gnss_files and imu_files:
             sessions.append(session_dir.name)
     return sessions
 
