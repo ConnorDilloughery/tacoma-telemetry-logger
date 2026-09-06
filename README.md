@@ -219,6 +219,29 @@ not just synthetic tests. A few of the more interesting issues:
   reminder that a growing set of real, sometimes-intentionally-partial
   data fixtures needs the test harness itself to stay honest about
   what it's actually assuming.
+- **Isolating the missing-video mystery: clip extraction proven
+  working, camera capture proven working, the gap is specifically
+  "during a real ignition-triggered drive."** Every real drive so far
+  has produced `video_<session>_meta.json` (confirming `camera_logger.py`
+  starts) but never the actual `.mp4`, and initial hypotheses focused
+  on signal handling and, later, undervoltage generally. To narrow
+  this down, two things were tested directly: (1) a manual desk test
+  of the full recording pipeline -- camera hardware, `rpicam-vid`,
+  signal handling, all of it -- produced a clean, valid 29-second video
+  on the very same power bank, no failure at all; (2) synthetic OBD
+  speed data with a fabricated hard-brake event, fed through
+  `extract_event_clips.py` against that real video, correctly detected
+  the event and produced a valid 5-second clip via `ffmpeg`. Together
+  these rule out the camera hardware, `camera_logger.py`, and the
+  entire clip-extraction pipeline as the cause. What's left is
+  narrower and more specific than "the Pi doesn't get enough power" in
+  general: something particular to being in the vehicle during an
+  ignition-triggered drive -- most likely the CAN/OBD-II connection
+  drawing additional current that isn't present in a desk test --
+  is preventing the recording from ever completing. Next step: a
+  parked-engine test (CANable connected, engine running, vehicle
+  stationary) to isolate CAN load from actual driving/vibration as the
+  responsible variable.
 
 ## Future Work
 
