@@ -205,6 +205,28 @@ def plot_imu_accel(df: pd.DataFrame, out_path: Path):
 
 
 
+def compute_duration_s(df: pd.DataFrame, jump_threshold_s: float = 60.0) -> float:
+    """
+    Sums the time elapsed between consecutive samples, excluding any
+    single gap larger than jump_threshold_s.
+
+    A naive (max - min) duration breaks the same way ekf_fusion.py's
+    dt-unclamped predict step used to: this Pi has no battery-backed
+    real-time clock, so it can boot with a stale clock and jump
+    forward by hours once NTP syncs mid-session. One such jump
+    (confirmed as large as ~7 hours in a real drive) between two
+    otherwise ~0.1s-spaced rows turned a real ~4.5-minute drive into a
+    reported 434-minute one. Summing the normal small gaps and
+    dropping anything above the threshold gives the actual recorded
+    duration instead.
+    """
+    if len(df) < 2:
+        return 0.0
+    dt = df["timestamp"].sort_values().diff().dt.total_seconds().dropna()
+    normal_gaps = dt[dt <= jump_threshold_s]
+    return float(normal_gaps.sum())
+
+
 def main():
     parser = argparse.ArgumentParser(description="Generate a per-drive report (stats, plots, README) from an aligned CSV.")
     parser.add_argument("--aligned", required=True, help="Path to the aligned session CSV")
@@ -224,7 +246,7 @@ def main():
         with open(args.events) as f:
             events = json.load(f)
 
-    duration_s = (df["timestamp"].max() - df["timestamp"].min()).total_seconds()
+    duration_s = compute_duration_s(df)
     distance_miles = compute_distance_miles(df)
     max_speed = df["obd_speed"].max() if "obd_speed" in df.columns else None
     max_rpm = df["obd_rpm"].max() if "obd_rpm" in df.columns else None

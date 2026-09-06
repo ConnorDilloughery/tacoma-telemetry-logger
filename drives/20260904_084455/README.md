@@ -1,7 +1,7 @@
 # Drive: 20260904_084455
 
 - **Start time:** 2026-09-04T08:44:58.407604
-- **Duration:** 26082 s (434.7 min)
+- **Duration:** 300 s (5.0 min)
 - **Distance:** 1.39 mi
 - **Max speed:** 41.6 mph
 - **Max RPM:** 2838.0
