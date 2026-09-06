@@ -195,6 +195,30 @@ not just synthetic tests. A few of the more interesting issues:
   running) to isolate whether this is the power bank's sustained
   current capacity, the cable, or a connector, before deciding on a
   hardware fix.
+- **More corroborating evidence: a corrupted UART byte stream.** A
+  later drive's GNSS log contained one row where `fix_quality` --
+  normally a clean `0` or `1` -- was instead a string of scrambled
+  binary-looking characters
+  (`')"["SeKIW-g[DIII"YZ"SuMFI!%I][IITS"Q"S%g8'`), which crashed
+  `generate_drive_report.py`'s fix-quality comparison outright. A
+  scrambled serial byte stream, rather than a dropped connection or a
+  stuck value, is a distinct new failure signature -- and a very
+  plausible symptom of exactly the kind of voltage instability already
+  confirmed on this system, rather than a coincidence. Fixed by
+  coercing the column to numeric with `errors="coerce"` (treating
+  anything unparseable as an unknown fix quality rather than crashing
+  or silently misinterpreting it) and mitigated as the same session
+  cap and reduced session length changes above.
+- **CI regression suite gap: an intentionally incomplete drive broke
+  the test discovery logic.** The `20260904_061729` drive above (IMU
+  failed to start) has only OBD and GNSS files, but `discover_sessions()`
+  in the test suite assumed every `drives/*/raw/` folder had a
+  complete set of three sensor files, so CI started failing the moment
+  that drive was committed. Fixed by requiring all three files to be
+  present before treating a folder as a testable session -- a good
+  reminder that a growing set of real, sometimes-intentionally-partial
+  data fixtures needs the test harness itself to stay honest about
+  what it's actually assuming.
 
 ## Future Work
 
