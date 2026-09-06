@@ -11,7 +11,7 @@
 ![route](route_map.png)
 
 ## EKF Sensor Fusion
-_EKF fusion not yet run for this drive (see ekf_fusion.py)._
+![ekf](ekf_comparison.png)
 
 ## Speed
 ![speed](speed.png)

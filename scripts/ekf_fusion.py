@@ -69,6 +69,33 @@ def latlon_to_local_xy(lat, lon, lat0, lon0):
     return x, y
 
 
+def fix_clock_jumps(df: pd.DataFrame, jump_threshold_s: float = 60.0) -> pd.DataFrame:
+    """
+    Shifts timestamps to remove large discontinuities (see the
+    matching function/docstring in generate_drive_report.py for the
+    full explanation -- this Pi has no battery-backed RTC and can jump
+    its clock forward by hours mid-session once NTP syncs). Run this
+    once up front rather than relying solely on the dt-clamp in
+    predict(): the clamp only stops a single bad step from teleporting
+    the position, it doesn't fix every downstream row's timestamp
+    still being wrong afterward.
+    """
+    df = df.sort_values("timestamp").reset_index(drop=True)
+    dt = df["timestamp"].diff()
+    jump_mask = dt.dt.total_seconds() > jump_threshold_s
+    if not jump_mask.any():
+        return df
+
+    corrected = df["timestamp"].copy()
+    for jump_idx in df.index[jump_mask]:
+        jump_size = dt.loc[jump_idx]
+        corrected.loc[jump_idx:] = corrected.loc[jump_idx:] - jump_size
+        print(f"  corrected a {jump_size.total_seconds():.1f}s clock jump at row {jump_idx}")
+
+    df["timestamp"] = corrected
+    return df
+
+
 class EKF:
     def __init__(self, x0, y0, heading0, speed0):
         self.state = np.array([x0, y0, heading0, speed0], dtype=float)
@@ -145,6 +172,7 @@ def main():
     df = pd.read_csv(args.aligned)
     df["timestamp"] = pd.to_datetime(df["timestamp"])
     df = df.sort_values("timestamp").reset_index(drop=True)
+    df = fix_clock_jumps(df)
 
     # Filter obviously-invalid GNSS points (same null-island / fix
     # quality logic used in generate_drive_report.py).

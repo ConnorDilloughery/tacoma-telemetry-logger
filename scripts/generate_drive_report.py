@@ -205,26 +205,52 @@ def plot_imu_accel(df: pd.DataFrame, out_path: Path):
 
 
 
-def compute_duration_s(df: pd.DataFrame, jump_threshold_s: float = 60.0) -> float:
+def fix_clock_jumps(df: pd.DataFrame, jump_threshold_s: float = 60.0) -> pd.DataFrame:
     """
-    Sums the time elapsed between consecutive samples, excluding any
-    single gap larger than jump_threshold_s.
+    Detects large timestamp discontinuities (this Pi has no
+    battery-backed real-time clock, so it can boot with a stale clock
+    and jump forward by hours once NTP syncs mid-session) and shifts
+    every timestamp after each jump back by the jump's size, so the
+    corrected timeline is continuous.
 
-    A naive (max - min) duration breaks the same way ekf_fusion.py's
-    dt-unclamped predict step used to: this Pi has no battery-backed
-    real-time clock, so it can boot with a stale clock and jump
-    forward by hours once NTP syncs mid-session. One such jump
-    (confirmed as large as ~7 hours in a real drive) between two
-    otherwise ~0.1s-spaced rows turned a real ~4.5-minute drive into a
-    reported 434-minute one. Summing the normal small gaps and
-    dropping anything above the threshold gives the actual recorded
-    duration instead.
+    This fixes the root cause rather than working around it in one
+    place: compute_duration_s() previously excluded jump gaps from the
+    duration SUM, but every plot still used the raw, unshifted
+    timestamps directly on the x-axis, so a plot would show one sliver
+    of real data at the (wrong) early time, a multi-hour empty gap,
+    and another sliver at the (correct) later time. Correcting the
+    timestamps once, immediately after loading, means duration, every
+    plot, and anything else downstream all just work on a normal,
+    continuous timeline without needing their own special-case logic.
+
+    Assumes at most one real drive's worth of continuous data with an
+    occasional single clock-jump artifact -- not a general-purpose
+    fix for arbitrarily corrupted timestamps.
     """
+    df = df.sort_values("timestamp").reset_index(drop=True)
+    dt = df["timestamp"].diff()
+    jump_mask = dt.dt.total_seconds() > jump_threshold_s
+    if not jump_mask.any():
+        return df
+
+    corrected = df["timestamp"].copy()
+    # Walk jumps in order; each one shifts itself and everything after
+    # it back by the jump's size, so multiple jumps (if they occur)
+    # compound correctly rather than only the first being corrected.
+    for jump_idx in df.index[jump_mask]:
+        jump_size = dt.loc[jump_idx]
+        corrected.loc[jump_idx:] = corrected.loc[jump_idx:] - jump_size
+        print(f"  corrected a {jump_size.total_seconds():.1f}s clock jump at row {jump_idx}")
+
+    df["timestamp"] = corrected
+    return df
+
+
+def compute_duration_s(df: pd.DataFrame) -> float:
+    """Duration of a (clock-jump-corrected) continuous timeline."""
     if len(df) < 2:
         return 0.0
-    dt = df["timestamp"].sort_values().diff().dt.total_seconds().dropna()
-    normal_gaps = dt[dt <= jump_threshold_s]
-    return float(normal_gaps.sum())
+    return (df["timestamp"].max() - df["timestamp"].min()).total_seconds()
 
 
 def main():
@@ -240,6 +266,7 @@ def main():
 
     df = pd.read_csv(args.aligned)
     df["timestamp"] = pd.to_datetime(df["timestamp"])
+    df = fix_clock_jumps(df)
 
     events = []
     if args.events and Path(args.events).exists():
