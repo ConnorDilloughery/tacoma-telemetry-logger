@@ -243,15 +243,35 @@ not just synthetic tests. A few of the more interesting issues:
   stationary) to isolate CAN load from actual driving/vibration as the
   responsible variable.
 
-## Future Work
+## To-Do
 
-- Hardware-in-the-loop fault injection (simulated GPS dropouts,
-  corrupted CAN frames, IMU glitches) as automated test cases
-- CI pipeline that regression-tests the fusion pipeline against
-  recorded sessions on every commit
-- IMU-to-vehicle axis calibration
-- Further EKF tuning (process/measurement noise, GPS course as a
-  heading measurement)
+**Actively being investigated:**
+- [ ] Parked-engine test (CANable connected, engine running, vehicle
+      stationary, not driving) to determine whether CAN/OBD-II current
+      draw is what's preventing the dashcam video from completing
+      during real drives (camera hardware and clip extraction are both
+      already proven working in isolation -- see the Engineering Log)
+- [ ] Get a genuinely stable power source (better power bank and/or
+      cable) and confirm `vcgencmd get_throttled` reads clean (`0x0`)
+      under full real sensor load, not just at idle
+
+**Not yet started:**
+- [ ] Hardware-in-the-loop fault injection (simulated GPS dropouts,
+      corrupted CAN frames, IMU glitches) as automated test cases
+      added to the existing CI suite
+- [ ] IMU-to-vehicle axis calibration (replace the current "assume
+      X-axis is forward, Z-axis is vertical" approximation with a real
+      calibration pass, e.g. comparing IMU heading change to GPS
+      course change during turns)
+- [ ] Further EKF tuning (process/measurement noise values, using GPS
+      course as an additional heading measurement)
+- [ ] A dedicated shared module for the clock-jump correction logic,
+      currently duplicated across `ekf_fusion.py`,
+      `generate_drive_report.py`, and `extract_event_clips.py`
+
+**Done:**
+- [x] CI pipeline that regression-tests the fusion pipeline against
+      recorded sessions on every commit
 
 ## Drives
 
