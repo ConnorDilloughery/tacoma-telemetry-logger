@@ -255,7 +255,7 @@ not just synthetic tests. A few of the more interesting issues:
 
 ## Drives
 
-**10 drive(s) recorded.**
+**9 drive(s) recorded.**
 
 | Drive | Date | Duration | Distance | Max Speed | Hard Brakes |
 |---|---|---|---|---|---|
@@ -268,4 +268,3 @@ not just synthetic tests. A few of the more interesting issues:
 | [20260902_160823](drives/20260902_160823/README.md) | 2026-09-02 | 37.9 min | 22.1 mi | 72.1 mph | 13 |
 | [20260902_131536](drives/20260902_131536/README.md) | 2026-09-02 | 3.6 min | 0.9 mi | 41.0 mph | 4 |
 | [20260902_130608](drives/20260902_130608/README.md) | 2026-09-02 | 11.5 min | 1.3 mi | 36.0 mph | 4 |
-| [20260902_074421](drives/20260902_074421/README.md) | 2026-09-02 | 0.9 min | 0.0 mi | 0.0 mph | 0 |
