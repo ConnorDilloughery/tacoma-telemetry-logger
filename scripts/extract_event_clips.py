@@ -42,6 +42,34 @@ from pathlib import Path
 import pandas as pd
 
 
+def fix_clock_jumps(df: pd.DataFrame, jump_threshold_s: float = 60.0) -> pd.DataFrame:
+    """
+    Shifts timestamps to remove large discontinuities (this Pi has no
+    battery-backed real-time clock and can jump its clock forward by
+    hours mid-session once NTP syncs -- see the matching function in
+    generate_drive_report.py and ekf_fusion.py for the full
+    explanation). Without this, an event genuinely detected within the
+    first few minutes of a real drive could get timestamped on the
+    wrong (post-jump) side of a multi-hour gap, causing
+    generate_drive_report.py's red event markers to plot nowhere near
+    the actual speed data.
+    """
+    df = df.sort_values("timestamp").reset_index(drop=True)
+    dt = df["timestamp"].diff()
+    jump_mask = dt.dt.total_seconds() > jump_threshold_s
+    if not jump_mask.any():
+        return df
+
+    corrected = df["timestamp"].copy()
+    for jump_idx in df.index[jump_mask]:
+        jump_size = dt.loc[jump_idx]
+        corrected.loc[jump_idx:] = corrected.loc[jump_idx:] - jump_size
+        print(f"  corrected a {jump_size.total_seconds():.1f}s clock jump at row {jump_idx}")
+
+    df["timestamp"] = corrected
+    return df
+
+
 def find_brake_events(df: pd.DataFrame, threshold: float, merge_window: float):
     """
     Returns a list of (event_time, peak_decel_rate) tuples.
@@ -120,6 +148,7 @@ def main():
 
     df = pd.read_csv(args.aligned)
     df["timestamp"] = pd.to_datetime(df["timestamp"])
+    df = fix_clock_jumps(df)
 
     events = find_brake_events(df, args.threshold, args.merge_window)
     print(f"Detected {len(events)} hard-braking event(s)")

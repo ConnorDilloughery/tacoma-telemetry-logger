@@ -24,11 +24,11 @@
 
 ## Hard-Braking Events
 
-### Event 1 — 2026-09-04T15:55:26.772464
+### Event 1 — 2026-09-04T08:45:43.995721
 Deceleration: -11.98 mph/s
 
-### Event 2 — 2026-09-04T15:56:14.649629
+### Event 2 — 2026-09-04T08:46:31.872886
 Deceleration: -12.99 mph/s
 
-### Event 3 — 2026-09-04T15:58:24.504616
+### Event 3 — 2026-09-04T08:48:41.727873
 Deceleration: -13.01 mph/s
