@@ -208,10 +208,11 @@ not just synthetic tests. A few of the more interesting issues:
 
 ## Drives
 
-**9 drive(s) recorded.**
+**10 drive(s) recorded.**
 
 | Drive | Date | Duration | Distance | Max Speed | Hard Brakes |
 |---|---|---|---|---|---|
+| [20260904_084455](drives/20260904_084455/README.md) | 2026-09-04 | 434.7 min | 1.4 mi | 41.6 mph | 3 |
 | [20260904_063219](drives/20260904_063219/README.md) | 2026-09-04 | 0.9 min | 0.2 mi | 27.3 mph | 1 |
 | [20260903_171327](drives/20260903_171327/README.md) | 2026-09-03 | 3.8 min | 0.1 mi | 28.6 mph | 3 |
 | [20260903_170528](drives/20260903_170528/README.md) | 2026-09-03 | 5.1 min | 0.7 mi | 25.5 mph | 5 |

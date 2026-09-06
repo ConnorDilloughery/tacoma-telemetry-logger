@@ -66,7 +66,14 @@ def valid_gnss_points(df: pd.DataFrame) -> pd.DataFrame:
     valid = df.dropna(subset=cols).copy()
     valid = valid[~((valid["gnss_latitude"] == 0) & (valid["gnss_longitude"] == 0))]
     if "gnss_fix_quality" in valid.columns:
-        valid = valid[(valid["gnss_fix_quality"].isna()) | (valid["gnss_fix_quality"] >= 1)]
+        # Coerce to numeric first: a garbled/partial NMEA sentence can
+        # occasionally land a non-numeric value (empty string, stray
+        # text) in this column, which crashes a direct >= comparison.
+        # errors="coerce" turns anything unparseable into NaN, which
+        # the isna() branch below already treats as "keep" (unknown
+        # fix quality isn't the same as a confirmed bad one).
+        fix_quality = pd.to_numeric(valid["gnss_fix_quality"], errors="coerce")
+        valid = valid[(fix_quality.isna()) | (fix_quality >= 1)]
     return valid
 
 
@@ -161,15 +168,35 @@ def plot_route(df: pd.DataFrame, out_path: Path):
 
 
 def plot_imu_accel(df: pd.DataFrame, out_path: Path):
+    """
+    Plots IMU linear acceleration over time.
+
+    The first couple of seconds after the sensor is powered on show a
+    large transient spike as the BNO085's onboard fusion filter
+    converges (a real, expected characteristic of this chip, not a
+    fault) -- left unclipped, that brief spike compresses the rest of
+    the drive's real dynamics down to an unreadable flat line on a
+    shared y-axis. We set the y-axis range from the 1st-99th percentile
+    of the data instead of the full min/max, so the startup transient
+    doesn't dictate the scale; it's still visible poking above the
+    plot's edge, just not dominating it.
+    """
     accel_cols = ["imu_accel_x", "imu_accel_y", "imu_accel_z"]
     if not all(c in df.columns for c in accel_cols):
         return
     fig, ax = plt.subplots(figsize=(10, 4))
     for c, label in zip(accel_cols, ["x", "y", "z"]):
         ax.plot(df["timestamp"], df[c], label=label, linewidth=0.8)
+
+    all_vals = pd.concat([df[c] for c in accel_cols]).dropna()
+    if len(all_vals) > 0:
+        lo, hi = all_vals.quantile(0.01), all_vals.quantile(0.99)
+        pad = (hi - lo) * 0.15 if hi > lo else 1.0
+        ax.set_ylim(lo - pad, hi + pad)
+
     ax.set_xlabel("Time")
     ax.set_ylabel("Linear acceleration (m/s^2)")
-    ax.set_title("IMU linear acceleration")
+    ax.set_title("IMU linear acceleration (y-axis clipped to 1st-99th percentile)")
     ax.legend()
     fig.autofmt_xdate()
     fig.tight_layout()
@@ -233,6 +260,9 @@ def main():
         "",
         "## Route",
         "![route](route_map.png)" if (out_dir / "route_map.png").exists() else "_No GPS route available._",
+        "",
+        "## EKF Sensor Fusion",
+        "![ekf](ekf_comparison.png)" if (out_dir / "ekf_comparison.png").exists() else "_EKF fusion not yet run for this drive (see ekf_fusion.py)._",
         "",
         "## Speed",
         "![speed](speed.png)" if (out_dir / "speed.png").exists() else "_No speed data available._",
