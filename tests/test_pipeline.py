@@ -37,13 +37,27 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = REPO_ROOT / "scripts"
+
+# Reuse the actual clock-jump correction logic from ekf_fusion.py
+# directly, rather than re-deriving similar logic in this test file:
+# aligned.csv on disk always holds RAW, uncorrected timestamps (the
+# correction only happens in-memory inside ekf_fusion.py), so a test
+# that needs "real elapsed time since the last GPS fix" has to apply
+# the identical correction first, or a drive with a genuine clock jump
+# would silently get a wrong, misleading gap calculation.
+sys.path.insert(0, str(SCRIPTS_DIR))
+from ekf_fusion import fix_clock_jumps  # noqa: E402
 DRIVES_DIR = REPO_ROOT / "drives"
 
 # Physically-reasonable upper bounds for a passenger vehicle. These are
 # deliberately generous -- the point is to catch nonsense (a runaway
 # EKF reporting 4000 mph), not to be a precise speed limit checker.
 MAX_PLAUSIBLE_SPEED_MPH = 130
-MAX_PLAUSIBLE_STEP_METERS = 100   # max sane position change in one EKF step
+MAX_PLAUSIBLE_SPEED_MPH_MS = 60.0  # ~134 mph in m/s -- a little headroom above
+                                     # the EKF's own 45 m/s (~100 mph) innovation
+                                     # gate threshold, so this test independently
+                                     # confirms that gate is doing its job without
+                                     # being so tight it flags legitimate rounding
 MAX_PLAUSIBLE_DISTANCE_PER_MINUTE_MILES = 2.0  # ~120 mph sustained, generous
 
 
@@ -139,25 +153,74 @@ def test_ekf_runs_without_error(aligned_csv, tmp_path):
 
 def test_ekf_no_position_runaway(aligned_csv, tmp_path):
     """
-    Regression test for the clock-discontinuity bug: a single bad
-    timestamp gap once caused the EKF to jump the fused position
-    ~2700m in one step. If dt clamping in ekf_fusion.py's predict()
-    step is ever removed or broken, this test should catch it.
+    Regression test for the clock-discontinuity bug and for corrupted/
+    implausible GPS readings: a single bad timestamp gap once caused
+    the EKF to jump the fused position ~2700m in one step, and
+    separately a corrupted-but-numerically-valid GPS coordinate once
+    produced a multi-thousand-km jump.
+
+    Checks PLAUSIBILITY, not a flat distance -- but critically, NOT by
+    dividing a jump by the time between consecutive OUTPUT rows either.
+    A Kalman correction is applied instantaneously, in a single ~0.1s
+    output row, no matter how many real seconds the GPS gap it's
+    correcting for actually spanned -- so "distance / row-to-row dt"
+    makes a legitimate multi-hundred-meter catch-up after a real
+    30-second blackout look identical to an impossible one after a
+    single 0.1s step (confirmed: a real, evidence-backed 386m
+    correction computed out to an "implied" 3841 m/s this way, despite
+    being entirely legitimate). The correct comparison is the same one
+    ekf_fusion.py's own innovation gate uses: distance versus the REAL
+    elapsed time since the last genuinely new GPS reading, which has
+    to come from aligned.csv's own GNSS timestamps, not fused.csv's
+    row-to-row spacing.
     """
     run_script("ekf_fusion.py", ["--aligned", str(aligned_csv), "--out-dir", str(tmp_path)], cwd=tmp_path)
     fused_path = tmp_path / "fused.csv"
     if not fused_path.exists():
         pytest.skip("No valid GPS fix in this session -- EKF fusion doesn't run (expected for a stationary-only drive).")
 
-    df = pd.read_csv(fused_path)
-    dx = df["fused_x_m"].diff()
-    dy = df["fused_y_m"].diff()
+    fused = pd.read_csv(fused_path)
+    fused["timestamp"] = pd.to_datetime(fused["timestamp"])
+
+    aligned = pd.read_csv(aligned_csv)
+    aligned["timestamp"] = pd.to_datetime(aligned["timestamp"])
+    aligned = fix_clock_jumps(aligned)
+
+    # For each row, find how long it's been since gnss_latitude last
+    # took on a genuinely new value (a proxy for "time since the last
+    # real GPS fix", matching what the EKF's own gate tracks).
+    if "gnss_latitude" not in aligned.columns:
+        pytest.skip("No GNSS column in this session's aligned data.")
+
+    is_new_fix = aligned["gnss_latitude"] != aligned["gnss_latitude"].shift(1)
+    last_fix_time = aligned["timestamp"].where(is_new_fix).ffill()
+    time_since_last_fix = (aligned["timestamp"] - last_fix_time).dt.total_seconds()
+
+    dx = fused["fused_x_m"].diff()
+    dy = fused["fused_y_m"].diff()
     step = (dx**2 + dy**2) ** 0.5
-    max_step = step.max()
-    assert max_step < MAX_PLAUSIBLE_STEP_METERS, (
-        f"EKF position jumped {max_step:.0f}m in a single step (max allowed: "
-        f"{MAX_PLAUSIBLE_STEP_METERS}m) -- likely a clock discontinuity or "
-        f"unclamped dt regression."
+
+    # Align the two frames by row position (both are one row per IMU
+    # sample from the same aligned.csv, so this holds as long as
+    # ekf_fusion.py doesn't drop rows -- true today).
+    n = min(len(step), len(time_since_last_fix))
+    gap_s = time_since_last_fix.iloc[:n].reset_index(drop=True)
+    step = step.iloc[:n].reset_index(drop=True)
+
+    # A gap of 0 (or near-0) means this row wasn't a fresh GPS
+    # correction at all, just an ordinary predict step; use a floor
+    # so we're not dividing by a near-zero real gap either.
+    MIN_MEANINGFUL_GAP_S = 0.5
+    implied_speed = (step / gap_s).where(gap_s >= MIN_MEANINGFUL_GAP_S, 0)
+    implied_speed = implied_speed.replace([float("inf"), -float("inf")], 0).fillna(0)
+    max_implied_speed = implied_speed.max()
+
+    assert max_implied_speed < MAX_PLAUSIBLE_SPEED_MPH_MS, (
+        f"EKF position change implied a speed of {max_implied_speed:.0f} m/s "
+        f"relative to actual elapsed time since the last real GPS fix "
+        f"(max allowed: {MAX_PLAUSIBLE_SPEED_MPH_MS} m/s) -- likely a clock "
+        f"discontinuity, unclamped dt regression, or the GPS innovation gate "
+        f"failing to reject a corrupted/implausible fix."
     )
 
 

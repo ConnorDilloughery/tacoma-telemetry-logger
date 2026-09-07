@@ -115,49 +115,145 @@ class EKF:
         self.R_speed = np.array([[0.5]])          # OBD speed is fairly trustworthy
 
     def predict(self, dt, accel, yaw_rate):
+        # Cap how much real time the KINEMATIC INTEGRATION is allowed
+        # to extrapolate over in one step, even though we still use the
+        # true dt to scale process noise below. A single instantaneous
+        # IMU snapshot (one accel/yaw-rate reading) is a reasonable
+        # stand-in for "what the vehicle was doing" over a couple of
+        # seconds, but assuming it held constant for 10+ seconds is not
+        # -- real driving continuously changes speed and heading, so
+        # extrapolating a stale snapshot across a long real gap (e.g. an
+        # I2C/IMU dropout lasting many seconds, confirmed via
+        # `--> Nm jump in 10+s` messages this project has actually
+        # logged) produces exactly the kind of large single-step
+        # "runaway" this fusion pipeline's own tests are designed to
+        # catch -- except it isn't corrupted data this time, it's a
+        # genuinely bad extrapolation assumption over a real gap.
+        # Capping the integration dt means the filter simply stops
+        # moving the position estimate forward once a gap gets long
+        # enough that the constant-velocity/constant-turn-rate
+        # assumption stops being reasonable, and instead leans on
+        # inflated uncertainty (using the FULL true dt for Q below) so
+        # the next real GPS/OBD measurement -- now also protected by
+        # the innovation gate above -- corrects it properly instead of
+        # the filter confidently reporting a wild extrapolation.
+        INTEGRATION_DT_CAP_S = 3.0
+        integration_dt = min(dt, INTEGRATION_DT_CAP_S)
+
         x, y, heading, speed = self.state
 
         # Nonlinear state transition
-        x_new = x + speed * math.cos(heading) * dt
-        y_new = y + speed * math.sin(heading) * dt
-        heading_new = heading + yaw_rate * dt
-        speed_new = speed + accel * dt
+        x_new = x + speed * math.cos(heading) * integration_dt
+        y_new = y + speed * math.sin(heading) * integration_dt
+        heading_new = heading + yaw_rate * integration_dt
+        speed_new = speed + accel * integration_dt
 
         self.state = np.array([x_new, y_new, heading_new, speed_new])
+        self._clamp_speed()
 
         # Jacobian of the state transition (linearization around the
         # current state) -- this is the "Extended" part of EKF: exact
         # for a linear model, a locally-valid approximation here since
-        # our motion model is nonlinear (heading-dependent).
+        # our motion model is nonlinear (heading-dependent). Uses the
+        # same capped dt as the state transition above, for consistency.
         F = np.array([
-            [1, 0, -speed * math.sin(heading) * dt, math.cos(heading) * dt],
-            [0, 1,  speed * math.cos(heading) * dt, math.sin(heading) * dt],
+            [1, 0, -speed * math.sin(heading) * integration_dt, math.cos(heading) * integration_dt],
+            [0, 1,  speed * math.cos(heading) * integration_dt, math.sin(heading) * integration_dt],
             [0, 0, 1, 0],
             [0, 0, 0, 1],
         ])
 
+        # Process noise uses the TRUE dt, not the capped one: a longer
+        # real gap should make the filter progressively less confident
+        # in its own state, even though it stopped extrapolating
+        # position/speed further after INTEGRATION_DT_CAP_S.
         Q = self.Q_base * dt
         self.P = F @ self.P @ F.T + Q
 
-    def update_gps(self, x_meas, y_meas):
+    def update_gps(self, x_meas, y_meas, trusted=False):
         H = np.array([
             [1, 0, 0, 0],
             [0, 1, 0, 0],
         ])
         z = np.array([x_meas, y_meas])
-        self._update(z, H, self.R_gps)
+        self._update(z, H, self.R_gps, trusted=trusted)
 
     def update_speed(self, speed_meas):
         H = np.array([[0, 0, 0, 1]])
         z = np.array([speed_meas])
         self._update(z, H, self.R_speed)
 
-    def _update(self, z, H, R):
+    def _update(self, z, H, R, trusted=False):
         y = z - H @ self.state  # innovation (measurement residual)
         S = H @ self.P @ H.T + R
         K = self.P @ H.T @ np.linalg.inv(S)  # Kalman gain
-        self.state = self.state + K @ y
+        correction = K @ y
+
+        # Sanity-check the correction itself, not just the measurement
+        # that produced it: a numerically unstable Kalman gain (e.g.
+        # from an ill-conditioned P matrix) can apply an enormous
+        # correction directly to POSITION (state[0]/state[1]) in one
+        # update -- confirmed on a real drive where a 9433m single-step
+        # jump occurred at an ordinary predict-only row with completely
+        # normal dt and OBD speed, meaning the position itself must
+        # have already been corrupted by an earlier update's corrupted
+        # correction, not by anything wrong with that row's own inputs.
+        #
+        # `trusted=True` (used for a GPS fix already confirmed by a
+        # second, independent, mutually-consistent reading in the
+        # calling code) bypasses this check entirely. Discovered why
+        # this has to be optional: applying the check unconditionally
+        # created a WORSE failure than the one it was meant to prevent
+        # -- once real dead-reckoning drift exceeds the threshold, every
+        # subsequent correction attempting to fix that drift also looks
+        # "too large" relative to the increasingly-wrong internal state,
+        # so the filter refuses ALL further GPS corrections forever,
+        # even ones independently confirmed as internally consistent
+        # with each other. On one real drive this silently let the
+        # reported position diverge over 31 kilometers from the true
+        # GPS track across a ~13-minute stretch, with no visible
+        # single-step jump at all to flag it. A correction confirmed by
+        # agreement between two independent readings is strong enough
+        # evidence of correctness that it should be trusted regardless
+        # of size; the magnitude check is only meant to catch a single,
+        # unconfirmed, possibly-corrupted or numerically-unstable
+        # correction, not to permanently veto real recovery from drift.
+        MAX_POSITION_CORRECTION_M = 200.0
+        position_correction_mag = math.hypot(correction[0], correction[1])
+        if not trusted and position_correction_mag > MAX_POSITION_CORRECTION_M:
+            print(
+                f"  discarded a {position_correction_mag:.0f}m Kalman correction "
+                f"(max allowed: {MAX_POSITION_CORRECTION_M:.0f}m) -- likely a "
+                f"numerically unstable gain rather than a real, physically "
+                f"plausible correction; keeping the pre-update state instead"
+            )
+            return
+
+        self.state = self.state + correction
         self.P = (np.eye(len(self.state)) - K @ H) @ self.P
+        # Keep P symmetric: floating-point roundoff accumulated over a
+        # long drive (thousands of predict/update cycles) can nudge P
+        # away from perfect symmetry, and an asymmetric covariance
+        # matrix is a well-known way for an EKF to become numerically
+        # unstable and silently diverge over time -- suspected as the
+        # root cause of one real drive's speed state reaching an
+        # absurd ~94,000 m/s with no corresponding bad sensor input at
+        # all. Averaging P with its own transpose after every update is
+        # a standard, cheap defensive measure for exactly this.
+        self.P = (self.P + self.P.T) / 2
+        self._clamp_speed()
+
+    def _clamp_speed(self):
+        # Final, unconditional safety net on the state itself, applied
+        # after every predict AND update: whatever the root cause of a
+        # divergence might be (numerical instability, a sensor
+        # reading that slipped past upstream validation, anything not
+        # yet anticipated), the fused output should never report a
+        # speed beyond what this vehicle can physically achieve. This
+        # bounds the position drift any single subsequent predict step
+        # can produce, regardless of why the state got here.
+        MAX_PLAUSIBLE_SPEED_MS = 60.0  # ~134 mph, generous upper bound
+        self.state[3] = max(-MAX_PLAUSIBLE_SPEED_MS, min(MAX_PLAUSIBLE_SPEED_MS, self.state[3]))
 
 
 def main():
@@ -186,10 +282,37 @@ def main():
         # so checking (0,0) alone isn't sufficient. Missing this
         # second check is exactly what let one bad early fix anchor
         # the whole session's coordinate origin on garbage data.
-        invalid = (df["gnss_latitude"] == 0) & (df["gnss_longitude"] == 0)
-        if "gnss_fix_quality" in df.columns:
-            invalid = invalid | (df["gnss_fix_quality"] == 0)
-        df.loc[invalid, ["gnss_latitude", "gnss_longitude"]] = np.nan
+        #
+        # fix_quality is coerced to numeric first: a garbled/partial
+        # NMEA sentence can leave a corrupted string in this column
+        # (confirmed once as literal scrambled binary-looking text).
+        # `== 0` against a string silently evaluates to False rather
+        # than raising -- unlike the `>=` crash caught earlier in
+        # generate_drive_report.py, this failure mode was SILENT, so a
+        # corrupted row was never being filtered out here at all. If
+        # the same corruption event also scrambled lat/lon in that
+        # row, that garbage coordinate would get fed straight into
+        # update_gps(), producing exactly the kind of massive
+        # single-step position jump test_ekf_no_position_runaway is
+        # designed to catch.
+        fix_quality = pd.to_numeric(df.get("gnss_fix_quality"), errors="coerce") if "gnss_fix_quality" in df.columns else None
+        lat_num = pd.to_numeric(df["gnss_latitude"], errors="coerce")
+        lon_num = pd.to_numeric(df["gnss_longitude"], errors="coerce")
+
+        invalid = (lat_num == 0) & (lon_num == 0)
+        if fix_quality is not None:
+            invalid = invalid | (fix_quality == 0)
+        # Defense in depth: also reject anything that isn't a finite,
+        # physically-plausible coordinate at all (catches corruption
+        # that doesn't happen to land on exactly (0,0) or fail the
+        # fix-quality check, e.g. a garbled lat/lon value directly).
+        invalid = invalid | lat_num.isna() | lon_num.isna()
+        invalid = invalid | (lat_num.abs() > 90) | (lon_num.abs() > 180)
+
+        lat_num[invalid] = np.nan
+        lon_num[invalid] = np.nan
+        df["gnss_latitude"] = lat_num
+        df["gnss_longitude"] = lon_num
 
     # Reference point for the local flat-ground projection: first valid GPS fix.
     valid_gps = df.dropna(subset=["gnss_latitude", "gnss_longitude"]) if has_gnss else pd.DataFrame()
@@ -209,6 +332,8 @@ def main():
     results = []
     prev_time = None
     prev_gps_latlon = None
+    prev_gps_time = None
+    pending_fix = None  # (x_meas, y_meas, t) for a reading that failed the gate but hasn't been ruled out yet
     prev_obd_speed = None
 
     for _, row in df.iterrows():
@@ -304,7 +429,92 @@ def main():
             latlon = (row["gnss_latitude"], row["gnss_longitude"])
             if latlon != prev_gps_latlon:
                 x_meas, y_meas = latlon_to_local_xy(latlon[0], latlon[1], lat0, lon0)
-                ekf.update_gps(x_meas, y_meas)
+                # Innovation gate: format-level validation (fix_quality,
+                # (0,0), numeric range) can't catch a coordinate that's
+                # perfectly well-formed but physically nonsensical given
+                # where the vehicle actually is -- confirmed by testing
+                # with a synthetically corrupted-but-in-range point that
+                # sailed straight through those checks and produced a
+                # multi-thousand-km single-step jump. Instead, reject
+                # any GPS fix implying a jump the vehicle couldn't
+                # plausibly have made in the time elapsed since the
+                # filter's last update. 100 mph is already far beyond
+                # this vehicle's real capability, so a jump requiring a
+                # higher implied speed than that is treated as a
+                # corrupted/outlier reading and skipped rather than fed
+                # into the filter.
+                #
+                # Elapsed time here MUST be measured since the last
+                # actual GPS fix, not the generic per-row IMU dt: GPS
+                # updates roughly once per second while the IMU runs at
+                # ~10Hz, so aligned.csv forward-fills the same lat/lon
+                # across ~10 rows before a new one appears. Using the
+                # tiny row-to-row dt (~0.1s) here made every ordinary,
+                # correct GPS update look 10x faster than it really was,
+                # which falsely rejected real corrections and let dead-
+                # reckoning drift accumulate uncorrected -- a first,
+                # broken version of this gate did exactly that.
+                MAX_PLAUSIBLE_SPEED_MS = 45.0  # ~100 mph, generous upper bound
+                dx_gps = x_meas - ekf.state[0]
+                dy_gps = y_meas - ekf.state[1]
+                gps_jump_dist = math.hypot(dx_gps, dy_gps)
+                elapsed_since_last_gps = (t - prev_gps_time).total_seconds() if prev_gps_time is not None else None
+                implied_speed = (
+                    gps_jump_dist / elapsed_since_last_gps
+                    if elapsed_since_last_gps and elapsed_since_last_gps > 0
+                    else 0.0  # first-ever fix: nothing to compare against, always accept
+                )
+
+                if implied_speed <= MAX_PLAUSIBLE_SPEED_MS:
+                    # Ordinary case: consistent with where the filter
+                    # already thinks it is. Accept immediately.
+                    ekf.update_gps(x_meas, y_meas)
+                    prev_gps_time = t
+                    pending_fix = None
+                else:
+                    # This reading disagrees sharply with the filter's
+                    # current (possibly drift-accumulated) estimate.
+                    # Rather than reject outright -- which would also
+                    # discard a LEGITIMATE large catch-up correction
+                    # after a genuinely long, continuous GPS blackout
+                    # (confirmed: a real 13s gap producing a 288m/22 m/s
+                    # correction is normal, expected EKF behavior) --
+                    # check whether it's independently confirmed by the
+                    # immediately preceding rejected reading. Two
+                    # readings landing close to each other (a real GPS
+                    # fix, ~1s apart, shouldn't move far) is strong
+                    # evidence both are real; a single, unconfirmed
+                    # outlier is far more likely to be a low-quality
+                    # fix right after reacquiring lock (a real, common
+                    # GPS behavior) or corrupted data -- confirmed by a
+                    # case where one such unconfirmed reading implied a
+                    # 620 mph jump and was never repeated.
+                    CONFIRM_MAX_GAP_S = 3.0
+                    CONFIRM_MAX_DIST_M = 60.0
+                    confirmed = False
+                    if pending_fix is not None:
+                        px, py, pt = pending_fix
+                        pending_gap_s = (t - pt).total_seconds()
+                        pending_dist = math.hypot(x_meas - px, y_meas - py)
+                        if pending_gap_s <= CONFIRM_MAX_GAP_S and pending_dist <= CONFIRM_MAX_DIST_M:
+                            confirmed = True
+
+                    if confirmed:
+                        print(
+                            f"  accepting GPS fix at {t} after confirmation by a matching "
+                            f"prior reading ({gps_jump_dist:.0f}m jump from filter, but only "
+                            f"{pending_dist:.0f}m from the previous candidate)"
+                        )
+                        ekf.update_gps(x_meas, y_meas, trusted=True)
+                        prev_gps_time = t
+                        pending_fix = None
+                    else:
+                        print(
+                            f"  rejected implausible GPS fix at {t}: {gps_jump_dist:.0f}m jump "
+                            f"in {elapsed_since_last_gps:.1f}s (implied {implied_speed:.0f} m/s) -- "
+                            f"holding as unconfirmed"
+                        )
+                        pending_fix = (x_meas, y_meas, t)
                 prev_gps_latlon = latlon
 
         # OBD speed correction -- same "only if new" logic.
