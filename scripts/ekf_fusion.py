@@ -217,19 +217,26 @@ def main():
             dt = 0.0
         else:
             dt = (t - prev_time).total_seconds()
-            # Defensive clamp: a system clock jump (e.g. the Pi's clock
-            # syncing to NTP mid-session, since it has no
-            # battery-backed real-time clock and boots with an
-            # arbitrary time until it gets network access) can produce
-            # one enormous dt between otherwise-~0.1s-spaced rows. Left
-            # unclamped, predict() would multiply speed by that huge dt
-            # and teleport the position hundreds of meters in one step
-            # -- exactly what happened here (a real 510-second gap
-            # between two consecutive samples). Capping dt at 1 second
-            # means a clock glitch costs at most one slightly-stale
-            # prediction step, not a permanent, unrecoverable jump.
-            if dt > 1.0 or dt < 0:
-                print(f"  clock discontinuity detected at {t} (dt={dt:.1f}s) -- clamping to 0.1s")
+            # fix_clock_jumps() (called above, before this loop) already
+            # finds and corrects genuine multi-second-to-hour NTP-sync
+            # discontinuities at the row level, so by the time we get
+            # here, a large dt is no longer expected to be clock
+            # corruption. It's much more likely to be a REAL gap -- e.g.
+            # the ~2s pause imu_logger.py's I2C staleness-recovery
+            # routine takes to reset and re-enable the sensor, which is
+            # genuine elapsed driving time, not an artifact. An earlier
+            # version of this clamp treated anything over 1 second as a
+            # clock glitch and shrank it to 0.1s, which quietly discarded
+            # real distance traveled during every IMU recovery -- over a
+            # long drive with many recoveries, that accumulated into
+            # exactly the kind of large single-step "runaway" this
+            # script's own dt-based safety net was meant to prevent
+            # (caught by test_ekf_no_position_runaway in tests/test_pipeline.py).
+            # The threshold here is now just a defensive backstop for
+            # anything fix_clock_jumps' own 60s threshold might have
+            # missed, not the primary correction mechanism.
+            if dt > 60.0 or dt < 0:
+                print(f"  unexpected large dt at {t} (dt={dt:.1f}s) -- clamping to 0.1s")
                 dt = 0.1
         prev_time = t
 
