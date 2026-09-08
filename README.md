@@ -275,20 +275,12 @@ not just synthetic tests. A few of the more interesting issues:
 
 ## Drives
 
-**19 drive(s) recorded.**
+**11 drive(s) recorded.**
 
 | Drive | Date | Duration | Distance | Max Speed | Hard Brakes |
 |---|---|---|---|---|---|
-| [20260907_154105](drives/20260907_154105/README.md) | 2026-09-07 | 0.5 min | 0.0 mi | 13.0 mph | 0 |
-| [20260907_153601](drives/20260907_153601/README.md) | 2026-09-07 | 5.0 min | 0.9 mi | 30.4 mph | 2 |
-| [20260907_151141](drives/20260907_151141/README.md) | 2026-09-07 | 0.1 min | 0.0 mi | 60.9 mph | 0 |
-| [20260907_150758](drives/20260907_150758/README.md) | 2026-09-07 | 3.1 min | 12250.3 mi | 54.7 mph | 2 |
-| [20260907_150254](drives/20260907_150254/README.md) | 2026-09-07 | 5.0 min | 3.5 mi | 59.7 mph | 0 |
-| [20260907_145750](drives/20260907_145750/README.md) | 2026-09-07 | 5.0 min | 3.8 mi | 64.0 mph | 0 |
-| [20260907_145246](drives/20260907_145246/README.md) | 2026-09-07 | 5.0 min | 0.1 mi | 68.4 mph | 2 |
-| [20260907_144740](drives/20260907_144740/README.md) | 2026-09-07 | 5.0 min | 0.8 mi | 36.0 mph | 6 |
-| [20260907_131012](drives/20260907_131012/README.md) | 2026-09-07 | 5.0 min | 0.9 mi | 31.1 mph | 7 |
-| [20260907_125957](drives/20260907_125957/README.md) | 2026-09-07 | 5.0 min | 0.0 mi | 32.9 mph | 8 |
+| [20260907_144740_combined](drives/20260907_144740_combined/README.md) | 2026-09-07 | 29.7 min | 12280.6 mi | 68.4 mph | 12 |
+| [20260907_125957_combined](drives/20260907_125957_combined/README.md) | 2026-09-07 | 10.0 min | 0.9 mi | 32.9 mph | 15 |
 | [20260904_084455](drives/20260904_084455/README.md) | 2026-09-04 | 5.0 min | 1.4 mi | 41.6 mph | 3 |
 | [20260904_063219](drives/20260904_063219/README.md) | 2026-09-04 | 0.9 min | 0.2 mi | 27.3 mph | 1 |
 | [20260903_171327](drives/20260903_171327/README.md) | 2026-09-03 | 3.8 min | 0.1 mi | 28.6 mph | 3 |

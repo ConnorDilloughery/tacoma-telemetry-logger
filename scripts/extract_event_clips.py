@@ -84,7 +84,24 @@ def find_brake_events(df: pd.DataFrame, threshold: float, merge_window: float):
     if speed_col not in df.columns:
         return []
 
-    sub = df[["timestamp", speed_col]].dropna().reset_index(drop=True)
+    cols = ["timestamp", speed_col]
+    # Carry the session-boundary marker through if combine_sessions.py
+    # added one (as imu_source_session, since IMU is the base timeline
+    # in align_logs.py's merge). Its presence means this data may
+    # splice together separately-recorded sessions with a real, dead
+    # time gap between them -- not the same thing as a single
+    # session's own clock-jump artifact. Computing a rate of change
+    # across that boundary divides a real (possibly large) speed
+    # change by a corrected, near-zero dt, manufacturing an impossible
+    # deceleration out of two genuinely unremarkable readings on
+    # either side of a real pause (confirmed: a real 59.7->1.2 mph
+    # change across a real ~24-minute gap between chained sessions
+    # was reported as a physically impossible "-141.6 mph/s" event).
+    session_col = "imu_source_session" if "imu_source_session" in df.columns else None
+    if session_col:
+        cols.append(session_col)
+
+    sub = df[cols].dropna(subset=["timestamp", speed_col]).reset_index(drop=True)
     if len(sub) < 2:
         return []
 
@@ -92,6 +109,10 @@ def find_brake_events(df: pd.DataFrame, threshold: float, merge_window: float):
     sub["dspeed"] = sub[speed_col].diff()
     # avoid divide-by-zero on duplicate/near-duplicate timestamps
     sub["decel_rate"] = sub["dspeed"] / sub["dt"].replace(0, pd.NA)
+
+    if session_col:
+        crosses_boundary = sub[session_col] != sub[session_col].shift(1)
+        sub.loc[crosses_boundary, "decel_rate"] = pd.NA
 
     flagged = sub[sub["decel_rate"] <= threshold].reset_index(drop=True)
     if flagged.empty:
