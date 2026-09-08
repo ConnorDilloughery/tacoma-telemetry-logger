@@ -1,0 +1,50 @@
+[
+  {
+    "index": 1,
+    "event_time": "2026-09-07T13:00:18.278344",
+    "decel_rate_mph_per_s": -13.71,
+    "clip_file": null
+  },
+  {
+    "index": 2,
+    "event_time": "2026-09-07T13:00:38.234068",
+    "decel_rate_mph_per_s": -18.56,
+    "clip_file": null
+  },
+  {
+    "index": 3,
+    "event_time": "2026-09-07T13:00:42.942399",
+    "decel_rate_mph_per_s": -13.91,
+    "clip_file": null
+  },
+  {
+    "index": 4,
+    "event_time": "2026-09-07T13:01:05.270472",
+    "decel_rate_mph_per_s": -13.12,
+    "clip_file": null
+  },
+  {
+    "index": 5,
+    "event_time": "2026-09-07T13:01:20.314044",
+    "decel_rate_mph_per_s": -11.97,
+    "clip_file": null
+  },
+  {
+    "index": 6,
+    "event_time": "2026-09-07T13:01:34.640584",
+    "decel_rate_mph_per_s": -15.9,
+    "clip_file": null
+  },
+  {
+    "index": 7,
+    "event_time": "2026-09-07T13:02:55.720801",
+    "decel_rate_mph_per_s": -12.06,
+    "clip_file": null
+  },
+  {
+    "index": 8,
+    "event_time": "2026-09-07T13:03:25.868563",
+    "decel_rate_mph_per_s": -11.27,
+    "clip_file": null
+  }
+]

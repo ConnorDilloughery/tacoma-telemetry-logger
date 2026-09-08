@@ -1,0 +1,38 @@
+[
+  {
+    "index": 1,
+    "event_time": "2026-09-07T14:48:31.529556",
+    "decel_rate_mph_per_s": -13.0,
+    "clip_file": null
+  },
+  {
+    "index": 2,
+    "event_time": "2026-09-07T14:49:04.724047",
+    "decel_rate_mph_per_s": -12.05,
+    "clip_file": null
+  },
+  {
+    "index": 3,
+    "event_time": "2026-09-07T14:49:29.894384",
+    "decel_rate_mph_per_s": -12.45,
+    "clip_file": null
+  },
+  {
+    "index": 4,
+    "event_time": "2026-09-07T14:50:20.196575",
+    "decel_rate_mph_per_s": -13.49,
+    "clip_file": null
+  },
+  {
+    "index": 5,
+    "event_time": "2026-09-07T14:51:42.861170",
+    "decel_rate_mph_per_s": -11.96,
+    "clip_file": null
+  },
+  {
+    "index": 6,
+    "event_time": "2026-09-07T14:51:57.593783",
+    "decel_rate_mph_per_s": -13.04,
+    "clip_file": null
+  }
+]
